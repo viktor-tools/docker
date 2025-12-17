@@ -16,20 +16,27 @@ if [ -z "$VIKTOR_APP_SECRET" ]; then
     exit 1
 fi
 
-if [ -z "$CI_MERGE_REQUEST_IID" ]; then
-    echo "ERROR: The CI_MERGE_REQUEST_IID environment variable must be defined (Job launched outside MR?)."
+if [ -z "$CI_MERGE_REQUEST_IID" ] && [ -z "$GITHUB_PR_ID" ]; then
+    echo "ERROR: Either CI_MERGE_REQUEST_IID (GitLab) or GITHUB_PR_ID (GitHub) environment variable must be defined (Job launched outside MR/PR?)."
     exit 1
+fi
+
+# Determine the merge request/pull request ID
+if [ -n "$CI_MERGE_REQUEST_IID" ]; then
+    MERGE_REQUEST_ID="$CI_MERGE_REQUEST_IID"
+elif [ -n "$GITHUB_PR_ID" ]; then
+    MERGE_REQUEST_ID="$GITHUB_PR_ID"
 fi
 
 
 # --- 1. Execute API call ---
 
-echo "Starting semantic analysis for MR #$CI_MERGE_REQUEST_IID on application $VIKTOR_APP_ID..."
+echo "Starting semantic analysis for MR/PR #$MERGE_REQUEST_ID on application $VIKTOR_APP_ID..."
 
 RESPONSE=$(curl -s -w "\n%{http_code}\n%{time_total}" \
     --request POST \
     --header "Content-Type: application/json" \
-    --data "{ \"appSecret\": \"$VIKTOR_APP_SECRET\", \"mergeRequestId\": \"$CI_MERGE_REQUEST_IID\" }" \
+    --data "{ \"appSecret\": \"$VIKTOR_APP_SECRET\", \"mergeRequestId\": \"$MERGE_REQUEST_ID\" }" \
     "$API_URL/semantic-analyze/$VIKTOR_APP_ID")
 
 # --- 2. Processing and Displaying Results ---
