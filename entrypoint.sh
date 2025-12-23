@@ -2,8 +2,8 @@
 
 # --- Configuration via Environment Variables ---
 
-# API URL (with a default for staging (for now) if not specified)
-API_URL="${VIKTOR_API_URL:-https://api.viktor.staging.marmotz.dev}"
+# API URL (with a default for prod if not specified)
+API_URL="${VIKTOR_API_URL:-https://api.viktor.tools}"
 
 # Checking mandatory variables
 if [ -z "$VIKTOR_APP_ID" ]; then
