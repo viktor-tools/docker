@@ -31,7 +31,7 @@ fi
 
 # --- 1. Execute API call ---
 
-echo "Starting semantic analysis for MR/PR #$MERGE_REQUEST_ID on application $VIKTOR_APP_ID..."
+echo "Starting Viktor review for MR/PR #$MERGE_REQUEST_ID on application $VIKTOR_APP_ID..."
 
 RESPONSE=$(curl -s -w "\n%{http_code}\n%{time_total}" \
     --request POST \
@@ -59,7 +59,7 @@ elif [ "$STATUS" -eq 204 ]; then
     exit 0 # Success (skipped)
 else
     ERROR_MESSAGE=$(echo "$BODY" | jq -r '.message')
-    echo "❌ Analysis failed (Status $STATUS): $ERROR_MESSAGE"
+    echo "❌ Review failed (Status $STATUS): $ERROR_MESSAGE"
     # Adding error detail for debugging
     # echo "Full response body: $BODY"
     exit 1 # Job failure

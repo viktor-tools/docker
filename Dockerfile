@@ -10,11 +10,11 @@ RUN apk update && \
     rm -rf /var/cache/apk/*
 
 # Copy the entry script into the image
-COPY entrypoint.sh /usr/local/bin/viktor-analyze
+COPY entrypoint.sh /usr/local/bin/viktor-review
 
 # Make the script executable
-RUN chmod +x /usr/local/bin/viktor-analyze
+RUN chmod +x /usr/local/bin/viktor-review
 
 # Define the default entrypoint.
 # When the user runs the container, this script will be executed.
-ENTRYPOINT ["/usr/local/bin/viktor-analyze"]
+ENTRYPOINT ["/usr/local/bin/viktor-review"]
