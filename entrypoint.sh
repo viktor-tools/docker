@@ -36,8 +36,10 @@ echo "Starting Viktor review for MR/PR #$MERGE_REQUEST_ID on application $VIKTOR
 RESPONSE=$(curl -s -w "\n%{http_code}\n%{time_total}" \
     --request POST \
     --header "Content-Type: application/json" \
-    --data "{ \"appSecret\": \"$VIKTOR_APP_SECRET\", \"mergeRequestId\": \"$MERGE_REQUEST_ID\" }" \
-    "$API_URL/semantic-analyze/$VIKTOR_APP_ID")
+    --header "X-APP-ID: $VIKTOR_APP_ID" \
+    --header "X-APP-SECRET: $VIKTOR_APP_SECRET" \
+    --data "{ \"mergeRequestId\": \"$MERGE_REQUEST_ID\" }" \
+    "$API_URL/semantic-analyze")
 
 # --- 2. Processing and Displaying Results ---
 
