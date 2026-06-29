@@ -1,0 +1,46 @@
+# Viktor Review — GitHub Actions Example
+#
+# Triggers a semantic code review on every pull request event.
+#
+# Required repository secrets:
+#   - VIKTOR_APP_ID     : Your Viktor project ID
+#   - VIKTOR_APP_SECRET : Your Viktor project secret key
+#
+# Minimal required token permissions (set at workflow or job level):
+#   - pull-requests: write  (to post the review comment on the PR)
+#   - contents: read        (to check out the repository)
+#
+# Usage:
+#   1. Copy this file to .github/workflows/viktor-review.yml in your repository
+#   2. Set VIKTOR_APP_ID and VIKTOR_APP_SECRET in your repository secrets
+
+name: Viktor Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  viktor-review:
+    name: Viktor Review
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Run Viktor Review
+        env:
+          VIKTOR_APP_ID: ${{ secrets.VIKTOR_APP_ID }}
+          VIKTOR_APP_SECRET: ${{ secrets.VIKTOR_APP_SECRET }}
+          GITHUB_PR_ID: ${{ github.event.pull_request.number }}
+          # Optional: override the default Viktor API URL
+          # VIKTOR_API_URL: https://api.viktor.tools
+        run: |
+          docker run --rm \
+            -e VIKTOR_APP_ID \
+            -e VIKTOR_APP_SECRET \
+            -e GITHUB_PR_ID \
+            -e VIKTOR_API_URL \
+            ghcr.io/marmotz/viktor-docker/review:latest

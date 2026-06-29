@@ -1,52 +1,48 @@
-name: Build and Push Docker Image
+name: Build and Push Docker Images
 
 on:
   push:
-    # Trigger when pushing to the 'main' branch
     branches: [ "main" ]
-    # Trigger only if Docker files change
     paths:
-      - 'Dockerfile'
-      - 'entrypoint.sh'
-  workflow_dispatch: # Allows manual workflow launch
+      - 'review/**'
+      - 'deep/**'
+  workflow_dispatch:
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read     # Read repository code (necessary for checkout)
-      packages: write    # Allow writing to the organization's registry (GHCR)
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        include:
+          - context: review
+            image: review
+          - context: deep
+            image: deep
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # --- Registry and Tags Configuration ---
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Determine Registry and Image Name
-        run: |
-          echo "REGISTRY=ghcr.io" >> $GITHUB_ENV
-          echo "IMAGE_NAME=review" >> $GITHUB_ENV
-
-      # --- 1. Login to Registry ---
-      - name: Log in to Registry (${{ env.REGISTRY }})
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
-          # If GHCR
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }} # Github user
-          password: ${{ secrets.GITHUB_TOKEN }} # Native Github token (for GHCR)
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      # --- 2. Build and Push Image ---
-      - name: Build and Push Docker Image
+      - name: Build and Push ${{ matrix.image }} image
         uses: docker/build-push-action@v5
         with:
-          context: . # Context is the root directory
+          context: ${{ matrix.context }}
           push: true
-          # Define tags: latest AND a tag based on the short commit SHA
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ghcr.io/${{ github.repository }}/${{ matrix.image }}:latest
+            ghcr.io/${{ github.repository }}/${{ matrix.image }}:${{ github.sha }}

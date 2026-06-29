@@ -1,0 +1,45 @@
+# Viktor Deep Analysis — GitLab CI Example
+#
+# Triggers a deep code analysis on merge request events.
+#
+# Required CI/CD variables (set in Settings > CI/CD > Variables):
+#   - VIKTOR_APP_ID     : Your Viktor project ID (masked)
+#   - VIKTOR_APP_SECRET : Your Viktor project secret key (masked)
+#
+# The built-in $CI_JOB_TOKEN provides read access to the current repository.
+# For private repositories hosted on a different GitLab instance, use a
+# Project Access Token with read_repository scope stored as GITLAB_TOKEN.
+#
+# Usage:
+#   1. Merge or include this file in your .gitlab-ci.yml
+#   2. Set VIKTOR_APP_ID and VIKTOR_APP_SECRET in your CI/CD variables
+#   3. The job runs automatically on every merge request event
+
+stages:
+  - analysis
+
+viktor-deep:
+  stage: analysis
+  image: docker:latest
+  services:
+    - docker:dind
+
+  # Only run on merge request pipelines
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+  variables:
+    VIKTOR_API_URL: "https://api.viktor.tools"
+    BASE_BRANCH: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+
+  script:
+    - |
+      docker run --rm \
+        -e VIKTOR_APP_ID="$VIKTOR_APP_ID" \
+        -e VIKTOR_APP_SECRET="$VIKTOR_APP_SECRET" \
+        -e REPO_URL="$CI_REPOSITORY_URL" \
+        -e BRANCH="$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME" \
+        -e BASE_BRANCH="$BASE_BRANCH" \
+        -e VCS_TOKEN="${GITLAB_TOKEN:-$CI_JOB_TOKEN}" \
+        -e VIKTOR_API_URL="$VIKTOR_API_URL" \
+        ghcr.io/marmotz/viktor-deep:latest

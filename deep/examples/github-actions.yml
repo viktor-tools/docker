@@ -1,0 +1,75 @@
+# Viktor Deep Analysis — GitHub Actions Example
+#
+# Triggers a deep code analysis when a maintainer comments "/viktor deep" on a pull request.
+#
+# Required repository secrets:
+#   - VIKTOR_APP_ID     : Your Viktor project ID
+#   - VIKTOR_APP_SECRET : Your Viktor project secret key
+#
+# Minimal required token permissions (set at workflow or job level):
+#   - pull-requests: read   (to read PR metadata and post the result comment)
+#   - contents: read        (to clone the repository)
+#
+# Usage:
+#   1. Copy this file to .github/workflows/viktor-deep.yml in your repository
+#   2. Set VIKTOR_APP_ID and VIKTOR_APP_SECRET in your repository secrets
+#   3. Comment "/viktor deep" on any pull request to trigger analysis
+
+name: Viktor Deep Analysis
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  pull-requests: read
+  contents: read
+
+jobs:
+  viktor-deep:
+    name: Viktor Deep Analysis
+    runs-on: ubuntu-latest
+
+    # Only run on pull request comments that contain "/viktor deep"
+    # and only when the commenter has write access (maintainer/owner)
+    if: |
+      github.event.issue.pull_request != null &&
+      contains(github.event.comment.body, '/viktor deep') &&
+      (github.event.comment.author_association == 'OWNER' ||
+       github.event.comment.author_association == 'MEMBER' ||
+       github.event.comment.author_association == 'COLLABORATOR')
+
+    steps:
+      - name: Get pull request branch
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            core.setOutput('branch', pr.data.head.ref);
+            core.setOutput('base_branch', pr.data.base.ref);
+
+      - name: Run Viktor Deep Analysis
+        env:
+          VIKTOR_APP_ID: ${{ secrets.VIKTOR_APP_ID }}
+          VIKTOR_APP_SECRET: ${{ secrets.VIKTOR_APP_SECRET }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
+          BRANCH: ${{ steps.pr.outputs.branch }}
+          BASE_BRANCH: ${{ steps.pr.outputs.base_branch }}
+          VCS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Optional: override the default Viktor API URL
+          # VIKTOR_API_URL: https://api.viktor.tools
+        run: |
+          docker run --rm \
+            -e VIKTOR_APP_ID \
+            -e VIKTOR_APP_SECRET \
+            -e REPO_URL \
+            -e BRANCH \
+            -e BASE_BRANCH \
+            -e VCS_TOKEN \
+            -e VIKTOR_API_URL \
+            ghcr.io/marmotz/viktor-deep:latest
