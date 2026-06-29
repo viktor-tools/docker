@@ -1,0 +1,37 @@
+# Viktor Review — GitLab CI Example
+#
+# Triggers a semantic code review on every merge request event.
+#
+# Required CI/CD variables (set in Settings > CI/CD > Variables):
+#   - VIKTOR_APP_ID     : Your Viktor project ID (masked)
+#   - VIKTOR_APP_SECRET : Your Viktor project secret key (masked)
+#
+# Usage:
+#   1. Merge or include this file in your .gitlab-ci.yml
+#   2. Set VIKTOR_APP_ID and VIKTOR_APP_SECRET in your CI/CD variables
+#   3. The job runs automatically on every merge request event
+
+stages:
+  - analysis
+
+viktor-review:
+  stage: analysis
+  image: docker:latest
+  services:
+    - docker:dind
+
+  # Only run on merge request pipelines
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+  variables:
+    VIKTOR_API_URL: "https://api.viktor.tools"
+
+  script:
+    - |
+      docker run --rm \
+        -e VIKTOR_APP_ID="$VIKTOR_APP_ID" \
+        -e VIKTOR_APP_SECRET="$VIKTOR_APP_SECRET" \
+        -e CI_MERGE_REQUEST_IID="$CI_MERGE_REQUEST_IID" \
+        -e VIKTOR_API_URL="$VIKTOR_API_URL" \
+        ghcr.io/marmotz/viktor-docker/review:latest
