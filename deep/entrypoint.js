@@ -16,6 +16,7 @@ const REPO_URL = process.env.REPO_URL;
 const BRANCH = process.env.BRANCH;
 const VCS_TOKEN = process.env.VCS_TOKEN;
 const REPO_DIR = '/repo';
+const DEFAULT_MODE = (process.env.VIKTOR_DEFAULT_MODE || 'deep').toUpperCase();
 
 const MAX_FILE_SIZE = 100 * 1024; // 100KB cap per file read
 const MAX_SEARCH_RESULTS = 50;
@@ -286,7 +287,7 @@ async function main() {
 
   // 3. Init review session
   console.log(`Initiating Deep analysis for branch "${BRANCH}"...`);
-  const initData = await apiPost(`${API_URL}/semantic-analyze/mcp/init`, { branch: BRANCH, mode: 'DEEP' });
+  const initData = await apiPost(`${API_URL}/semantic-analyze/mcp/init`, { branch: BRANCH, mode: DEFAULT_MODE });
 
   const { reviewId, issueData, completeUrl, cancelUrl, finalizeUrl } = initData;
 
