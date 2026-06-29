@@ -43,4 +43,4 @@ jobs:
             -e VIKTOR_APP_SECRET \
             -e GITHUB_PR_ID \
             -e VIKTOR_API_URL \
-            ghcr.io/marmotz/viktor-docker/review:latest
+            ghcr.io/viktor-tools/docker/review:latest

@@ -34,4 +34,4 @@ viktor-review:
         -e VIKTOR_APP_SECRET="$VIKTOR_APP_SECRET" \
         -e CI_MERGE_REQUEST_IID="$CI_MERGE_REQUEST_IID" \
         -e VIKTOR_API_URL="$VIKTOR_API_URL" \
-        ghcr.io/marmotz/viktor-docker/review:latest
+        ghcr.io/viktor-tools/docker/review:latest
