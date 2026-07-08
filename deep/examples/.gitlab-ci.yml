@@ -40,6 +40,7 @@ viktor-deep:
         -e REPO_URL="$CI_REPOSITORY_URL" \
         -e BRANCH="$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME" \
         -e BASE_BRANCH="$BASE_BRANCH" \
+        -e MR_IID="$CI_MERGE_REQUEST_IID" \
         -e VCS_TOKEN="${GITLAB_TOKEN:-$CI_JOB_TOKEN}" \
         -e VIKTOR_API_URL="$VIKTOR_API_URL" \
         ghcr.io/viktor-tools/docker/deep:latest

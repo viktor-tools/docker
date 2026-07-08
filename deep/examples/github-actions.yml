@@ -60,6 +60,7 @@ jobs:
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
           BRANCH: ${{ steps.pr.outputs.branch }}
           BASE_BRANCH: ${{ steps.pr.outputs.base_branch }}
+          PR_NUMBER: ${{ github.event.issue.number }}
           VCS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Optional: override the default Viktor API URL
           # VIKTOR_API_URL: https://api.viktor.tools
@@ -70,6 +71,7 @@ jobs:
             -e REPO_URL \
             -e BRANCH \
             -e BASE_BRANCH \
+            -e PR_NUMBER \
             -e VCS_TOKEN \
             -e VIKTOR_API_URL \
             ghcr.io/viktor-tools/docker/deep:latest

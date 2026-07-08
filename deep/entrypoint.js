@@ -15,6 +15,7 @@ const APP_SECRET = process.env.VIKTOR_APP_SECRET;
 const REPO_URL = process.env.REPO_URL;
 const BRANCH = process.env.BRANCH;
 const VCS_TOKEN = process.env.VCS_TOKEN;
+const MERGE_REQUEST_ID = process.env.PR_NUMBER || process.env.MR_IID;
 const REPO_DIR = '/repo';
 const DEFAULT_MODE = (process.env.VIKTOR_DEFAULT_MODE || 'deep').toUpperCase();
 
@@ -34,6 +35,11 @@ for (const [name, val] of [
     console.error(`ERROR: The ${name} environment variable must be defined.`);
     process.exit(1);
   }
+}
+
+if (DEFAULT_MODE === 'DEEP' && !MERGE_REQUEST_ID) {
+  console.error('ERROR: The PR_NUMBER (GitHub) or MR_IID (GitLab) environment variable must be defined for DEEP analysis.');
+  process.exit(1);
 }
 
 // --- Helpers ---
@@ -288,18 +294,17 @@ async function main() {
 
   // 3. Init review session
   console.log(`Initiating Deep analysis for branch "${BRANCH}"...`);
-  const initData = await apiPost(`${API_URL}/semantic-analyze/mcp/init`, { branch: BRANCH, mode: DEFAULT_MODE });
+  const initData = await apiPost(`${API_URL}/semantic-analyze/mcp/init`, {
+    branch: BRANCH,
+    mode: DEFAULT_MODE,
+    mergeRequestId: MERGE_REQUEST_ID,
+  });
 
   const { reviewId, issueData, completeUrl, cancelUrl, finalizeUrl } = initData;
 
   if (!reviewId) {
     console.error(`ERROR: Failed to initiate review. Response: ${JSON.stringify(initData)}`);
     process.exit(1);
-  }
-
-  if (!issueData) {
-    console.log('No issue ID found in branch name. Skipping analysis.');
-    process.exit(0);
   }
 
   console.log(`Review session started: ${reviewId}`);
