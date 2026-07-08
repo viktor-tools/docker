@@ -277,7 +277,7 @@ async function main() {
   console.log('Clone successful.');
 
   // 2. Generate diff
-  exec(`git -C ${REPO_DIR} fetch origin ${BASE_BRANCH}`);
+  exec(`git -C ${REPO_DIR} fetch origin ${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}`);
   const codeDiff = exec(`git -C ${REPO_DIR} diff origin/${BASE_BRANCH}...HEAD`);
 
   if (!codeDiff) {
