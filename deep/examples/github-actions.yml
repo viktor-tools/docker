@@ -72,4 +72,4 @@ jobs:
             -e BASE_BRANCH \
             -e VCS_TOKEN \
             -e VIKTOR_API_URL \
-            ghcr.io/marmotz/viktor-deep:latest
+            ghcr.io/viktor-tools/docker/deep:latest

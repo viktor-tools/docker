@@ -261,7 +261,8 @@ function parseAgentResult(text) {
 async function main() {
   // 1. Clone the repository
   console.log(`Cloning repository on branch "${BRANCH}"...`);
-  const repoWithToken = REPO_URL.replace('://', `://${VCS_TOKEN}@`);
+  const gitUsername = REPO_URL.includes('github.com') ? 'x-access-token' : 'gitlab-ci-token';
+  const repoWithToken = REPO_URL.replace('://', `://${gitUsername}:${VCS_TOKEN}@`);
   try {
     exec(`git clone --depth=50 --branch ${BRANCH} ${repoWithToken} ${REPO_DIR}`);
   } catch (err) {
