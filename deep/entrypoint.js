@@ -18,6 +18,9 @@ const VCS_TOKEN = process.env.VCS_TOKEN;
 const MERGE_REQUEST_ID = process.env.PR_NUMBER || process.env.MR_IID;
 const REPO_DIR = '/repo';
 const DEFAULT_MODE = (process.env.VIKTOR_DEFAULT_MODE || 'deep').toUpperCase();
+// Gated on an exact phrase rather than a plain boolean so verbose mode (which can log ticket/PR
+// content and full agent tool output) can't be flipped on by an arbitrary truthy value.
+const VERBOSE = process.env.VIKTOR_VERBOSE === 'talk a lot';
 
 const MAX_FILE_SIZE = 100 * 1024; // 100KB cap per file read
 const MAX_SEARCH_RESULTS = 50;
@@ -44,6 +47,10 @@ if (DEFAULT_MODE === 'DEEP' && !MERGE_REQUEST_ID) {
 
 // --- Helpers ---
 
+function verboseLog(...args) {
+  if (VERBOSE) console.log('[verbose]', ...args);
+}
+
 function authHeaders() {
   return {
     'Content-Type': 'application/json',
@@ -53,6 +60,7 @@ function authHeaders() {
 }
 
 async function apiPost(url, body) {
+  verboseLog(`POST ${url}`, JSON.stringify(body));
   const res = await fetch(url, {
     method: 'POST',
     headers: authHeaders(),
@@ -64,7 +72,30 @@ async function apiPost(url, body) {
     throw new Error(`HTTP ${res.status} from ${url}: ${text}`);
   }
 
-  return res.json();
+  const data = await res.json();
+  verboseLog(`Response ${res.status} from ${url}`, JSON.stringify(data));
+  return data;
+}
+
+// The finalize endpoint deliberately responds with HTTP 400 when the analysis completed but
+// scored below the acceptance threshold — that is a valid outcome (to be posted on the PR), not
+// a request/server error. Only treat the response as fatal when it doesn't carry a result.
+async function apiPostFinalize(url, body) {
+  verboseLog(`POST ${url}`, JSON.stringify(body));
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
+
+  const data = await res.json().catch(() => null);
+  verboseLog(`Response ${res.status} from ${url}`, JSON.stringify(data));
+
+  if (res.ok || (res.status === 400 && data?.result)) {
+    return data;
+  }
+
+  throw new Error(`HTTP ${res.status} from ${url}: ${JSON.stringify(data)}`);
 }
 
 function exec(cmd, opts = {}) {
@@ -291,6 +322,7 @@ async function main() {
     process.exit(1);
   }
   console.log(`Diff size: ${codeDiff.length} characters`);
+  verboseLog('Full diff:\n' + codeDiff);
 
   // 3. Init review session
   console.log(`Initiating Deep analysis for branch "${BRANCH}"...`);
@@ -308,6 +340,7 @@ async function main() {
   }
 
   console.log(`Review session started: ${reviewId}`);
+  verboseLog('Issue data used for the initial prompt:\n' + (issueData ?? '(none)'));
 
   // 4. Build initial message for the agent
   const initialUserMessage = {
@@ -326,6 +359,9 @@ async function main() {
     stepCount++;
     console.log(`Agent step ${stepCount}...`);
 
+    // Log only what's new this turn (the last message), not the whole growing history.
+    verboseLog(`>>> AI request (step ${stepCount}):\n${JSON.stringify(messages[messages.length - 1], null, 2)}`);
+
     let turnResult;
     try {
       turnResult = await apiPost(completeUrl, { messages });
@@ -336,6 +372,11 @@ async function main() {
     }
 
     const { text, toolCalls, finishReason } = turnResult;
+    verboseLog(`<<< AI response (step ${stepCount}) finishReason: ${finishReason}`);
+    verboseLog(`<<< AI response (step ${stepCount}) text:\n${text || '(empty)'}`);
+    if (toolCalls && toolCalls.length > 0) {
+      verboseLog(`<<< AI response (step ${stepCount}) requested actions:\n${JSON.stringify(toolCalls, null, 2)}`);
+    }
 
     // Add assistant message to history
     const assistantMsg = { role: 'assistant', text: text || '' };
@@ -360,7 +401,7 @@ async function main() {
       console.log('Finalizing analysis...');
       let finalizeResult;
       try {
-        finalizeResult = await apiPost(finalizeUrl, { result });
+        finalizeResult = await apiPostFinalize(finalizeUrl, { result });
       } catch (err) {
         console.error(`ERROR: Finalize failed: ${err.message}`);
         process.exit(1);
@@ -376,6 +417,7 @@ async function main() {
     for (const tc of toolCalls) {
       console.log(`  Tool call: ${tc.name}(${JSON.stringify(tc.input)})`);
       const result = executeTool(tc.name, tc.input);
+      verboseLog(`  Tool result for ${tc.name}:\n${result}`);
       toolResultContents.push({ toolCallId: tc.id, toolName: tc.name, result });
     }
     messages.push({ role: 'tool', results: toolResultContents });
