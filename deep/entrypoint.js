@@ -47,8 +47,13 @@ if (DEFAULT_MODE === 'DEEP' && !MERGE_REQUEST_ID) {
 
 // --- Helpers ---
 
-function verboseLog(...args) {
-  if (VERBOSE) console.log('[verbose]', ...args);
+// Collapsed by default in the GitHub Actions log UI via the ::group::/::endgroup:: markers.
+// On other CI platforms (e.g. GitLab) these markers just print as plain lines — harmless.
+function verboseGroup(title, content) {
+  if (!VERBOSE) return;
+  console.log(`::group::[verbose] ${title}`);
+  console.log(content);
+  console.log('::endgroup::');
 }
 
 function authHeaders() {
@@ -59,8 +64,8 @@ function authHeaders() {
   };
 }
 
-async function apiPost(url, body) {
-  verboseLog(`POST ${url}`, JSON.stringify(body));
+async function apiPost(url, body, { logBody = true, logResponse = true } = {}) {
+  if (logBody) verboseGroup(`POST ${url}`, JSON.stringify(body, null, 2));
   const res = await fetch(url, {
     method: 'POST',
     headers: authHeaders(),
@@ -73,7 +78,7 @@ async function apiPost(url, body) {
   }
 
   const data = await res.json();
-  verboseLog(`Response ${res.status} from ${url}`, JSON.stringify(data));
+  if (logResponse) verboseGroup(`Response ${res.status} from ${url}`, JSON.stringify(data, null, 2));
   return data;
 }
 
@@ -81,7 +86,7 @@ async function apiPost(url, body) {
 // scored below the acceptance threshold — that is a valid outcome (to be posted on the PR), not
 // a request/server error. Only treat the response as fatal when it doesn't carry a result.
 async function apiPostFinalize(url, body) {
-  verboseLog(`POST ${url}`, JSON.stringify(body));
+  verboseGroup(`POST ${url}`, JSON.stringify(body, null, 2));
   const res = await fetch(url, {
     method: 'POST',
     headers: authHeaders(),
@@ -89,7 +94,7 @@ async function apiPostFinalize(url, body) {
   });
 
   const data = await res.json().catch(() => null);
-  verboseLog(`Response ${res.status} from ${url}`, JSON.stringify(data));
+  verboseGroup(`Response ${res.status} from ${url}`, JSON.stringify(data, null, 2));
 
   if (res.ok || (res.status === 400 && data?.result)) {
     return data;
@@ -322,7 +327,7 @@ async function main() {
     process.exit(1);
   }
   console.log(`Diff size: ${codeDiff.length} characters`);
-  verboseLog('Full diff:\n' + codeDiff);
+  verboseGroup('Full diff', codeDiff);
 
   // 3. Init review session
   console.log(`Initiating Deep analysis for branch "${BRANCH}"...`);
@@ -340,7 +345,7 @@ async function main() {
   }
 
   console.log(`Review session started: ${reviewId}`);
-  verboseLog('Issue data used for the initial prompt:\n' + (issueData ?? '(none)'));
+  verboseGroup('Issue data used for the initial prompt', issueData ?? '(none)');
 
   // 4. Build initial message for the agent
   const initialUserMessage = {
@@ -360,11 +365,11 @@ async function main() {
     console.log(`Agent step ${stepCount}...`);
 
     // Log only what's new this turn (the last message), not the whole growing history.
-    verboseLog(`>>> AI request (step ${stepCount}):\n${JSON.stringify(messages[messages.length - 1], null, 2)}`);
+    verboseGroup(`>>> AI request (step ${stepCount})`, JSON.stringify(messages[messages.length - 1], null, 2));
 
     let turnResult;
     try {
-      turnResult = await apiPost(completeUrl, { messages });
+      turnResult = await apiPost(completeUrl, { messages }, { logBody: false, logResponse: false });
     } catch (err) {
       console.error(`ERROR: Agent turn failed: ${err.message}`);
       await fetch(cancelUrl, { method: 'POST', headers: authHeaders() }).catch(() => {});
@@ -372,11 +377,13 @@ async function main() {
     }
 
     const { text, toolCalls, finishReason } = turnResult;
-    verboseLog(`<<< AI response (step ${stepCount}) finishReason: ${finishReason}`);
-    verboseLog(`<<< AI response (step ${stepCount}) text:\n${text || '(empty)'}`);
-    if (toolCalls && toolCalls.length > 0) {
-      verboseLog(`<<< AI response (step ${stepCount}) requested actions:\n${JSON.stringify(toolCalls, null, 2)}`);
-    }
+    verboseGroup(
+      `<<< AI response (step ${stepCount})`,
+      `finishReason: ${finishReason}\n\ntext:\n${text || '(empty)'}` +
+        (toolCalls && toolCalls.length > 0
+          ? `\n\nrequested actions:\n${JSON.stringify(toolCalls, null, 2)}`
+          : '')
+    );
 
     // Add assistant message to history
     const assistantMsg = { role: 'assistant', text: text || '' };
@@ -417,7 +424,7 @@ async function main() {
     for (const tc of toolCalls) {
       console.log(`  Tool call: ${tc.name}(${JSON.stringify(tc.input)})`);
       const result = executeTool(tc.name, tc.input);
-      verboseLog(`  Tool result for ${tc.name}:\n${result}`);
+      verboseGroup(`Tool result for ${tc.name}`, result);
       toolResultContents.push({ toolCallId: tc.id, toolName: tc.name, result });
     }
     messages.push({ role: 'tool', results: toolResultContents });
