@@ -106,12 +106,25 @@ describe('toolSearchInFiles', () => {
     expect(result).toContain('login.component.ts');
   });
 
-  test('treats a pipe character as literal text when regex=false', () => {
+  // A "|" is a real, legitimate character to search for literally (e.g. shell scripts, table
+  // formatting, a regex embedded in source code) — the tool must keep honoring regex=false
+  // exactly, not silently reinterpret the query as an alternation.
+  test('treats a pipe character as literal text when regex=false, and does not match a literal pipe-free file', () => {
     const result = toolSearchInFiles({ query: 'login|password|authenticate', path: 'apps', regex: false });
-    expect(result).toBe('No matches found.');
+    expect(result).toContain('No matches found');
   });
 
-  test('returns "No matches found." when nothing matches', () => {
+  // Regression test: the agent has repeatedly called this tool with an alternation query
+  // (e.g. "login|password|email") without setting regex: true, and got a bare "No matches
+  // found." that reads as "this term doesn't exist in the codebase" even though it plainly does.
+  // Rather than guessing the caller's intent (which would break literal "|" searches), the tool
+  // surfaces the likely mistake so the caller can retry deliberately with regex: true.
+  test('hints at retrying with regex: true when a literal query containing "|" matches nothing', () => {
+    const result = toolSearchInFiles({ query: 'login|password|authenticate', path: 'apps', regex: false });
+    expect(result).toContain('regex: true');
+  });
+
+  test('returns a plain "No matches found." for a literal query with no regex metacharacters', () => {
     expect(toolSearchInFiles({ query: 'nonexistent_token_xyz', path: '.' })).toBe('No matches found.');
   });
 

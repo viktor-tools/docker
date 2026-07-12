@@ -161,6 +161,17 @@ function toolSearchInFiles({ query, path: searchPath = '.', regex = false }) {
 
     const files = (result.stdout || '').trim();
     if (!files) {
+      // A literal query containing a regex metacharacter (most commonly "|" for what was meant
+      // as alternation, e.g. "login|password") is a frequent caller mistake: with regex=false it
+      // was searched for verbatim, including the "|", so it legitimately matches nothing. Rather
+      // than silently returning a plain "No matches found." — which reads as "this term doesn't
+      // exist in the codebase" — surface the likely cause so the caller can retry deliberately.
+      if (!regex && /[|+?(){}[\]^$.*\\]/.test(query)) {
+        return (
+          'No matches found for the literal string (including any special characters it contains). ' +
+          'If you intended a regex (e.g. "|" for alternation), retry with regex: true.'
+        );
+      }
       return 'No matches found.';
     }
 
