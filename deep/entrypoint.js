@@ -16,7 +16,7 @@ const REPO_URL = process.env.REPO_URL;
 const BRANCH = process.env.BRANCH;
 const VCS_TOKEN = process.env.VCS_TOKEN;
 const MERGE_REQUEST_ID = process.env.PR_NUMBER || process.env.MR_IID;
-const REPO_DIR = '/repo';
+const REPO_DIR = process.env.VIKTOR_REPO_DIR || '/repo';
 const DEFAULT_MODE = (process.env.VIKTOR_DEFAULT_MODE || 'deep').toUpperCase();
 
 const MAX_FILE_SIZE = 100 * 1024; // 100KB cap per file read
@@ -24,22 +24,26 @@ const MAX_SEARCH_RESULTS = 50;
 
 // --- Validation ---
 
-for (const [name, val] of [
-  ['VIKTOR_APP_ID', APP_ID],
-  ['VIKTOR_APP_SECRET', APP_SECRET],
-  ['REPO_URL', REPO_URL],
-  ['BRANCH', BRANCH],
-  ['VCS_TOKEN', VCS_TOKEN],
-]) {
-  if (!val) {
-    console.error(`ERROR: The ${name} environment variable must be defined.`);
+function validateEnv() {
+  for (const [name, val] of [
+    ['VIKTOR_APP_ID', APP_ID],
+    ['VIKTOR_APP_SECRET', APP_SECRET],
+    ['REPO_URL', REPO_URL],
+    ['BRANCH', BRANCH],
+    ['VCS_TOKEN', VCS_TOKEN],
+  ]) {
+    if (!val) {
+      console.error(`ERROR: The ${name} environment variable must be defined.`);
+      process.exit(1);
+    }
+  }
+
+  if (DEFAULT_MODE === 'DEEP' && !MERGE_REQUEST_ID) {
+    console.error(
+      'ERROR: The PR_NUMBER (GitHub) or MR_IID (GitLab) environment variable must be defined for DEEP analysis.'
+    );
     process.exit(1);
   }
-}
-
-if (DEFAULT_MODE === 'DEEP' && !MERGE_REQUEST_ID) {
-  console.error('ERROR: The PR_NUMBER (GitHub) or MR_IID (GitLab) environment variable must be defined for DEEP analysis.');
-  process.exit(1);
 }
 
 // --- Helpers ---
@@ -137,14 +141,21 @@ function toolSearchInFiles({ query, path: searchPath = '.', regex = false }) {
   try {
     const abs = safePath(searchPath);
     const flags = ['-r', '-l', '--include=*'];
-    if (!regex) flags.push('-F'); // fixed string (no regex) unless regex=true
+    flags.push(regex ? '-E' : '-F'); // extended regex when regex=true, fixed string otherwise
     const result = spawnSync('grep', [...flags, query, abs], {
       encoding: 'utf8',
       maxBuffer: 1024 * 1024,
     });
-    if (result.error) return `Search error: ${result.error.message}`;
+
+    if (result.error) {
+      return `Search error: ${result.error.message}`;
+    }
+
     const files = (result.stdout || '').trim();
-    if (!files) return 'No matches found.';
+    if (!files) {
+      return 'No matches found.';
+    }
+
     const lines = files.split('\n').slice(0, MAX_SEARCH_RESULTS);
     const snippetFlags = regex ? ['-n', '-E'] : ['-n', '-F'];
     const snippets = lines.map((f) => {
@@ -153,6 +164,7 @@ function toolSearchInFiles({ query, path: searchPath = '.', regex = false }) {
       const rel = path.relative(REPO_DIR, f);
       return `--- ${rel} ---\n${matches}`;
     });
+
     return snippets.join('\n\n');
   } catch (err) {
     return `Error searching: ${err.message}`;
@@ -405,7 +417,24 @@ async function main() {
   process.exit(1);
 }
 
-main().catch((err) => {
-  console.error(`FATAL: ${err.message}`);
-  process.exit(1);
-});
+if (require.main === module) {
+  validateEnv();
+  main().catch((err) => {
+    console.error(`FATAL: ${err.message}`);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  safePath,
+  toolReadFile,
+  toolListDirectory,
+  toolSearchInFiles,
+  toolGetFileTree,
+  toolFindFiles,
+  toolReadFileLines,
+  toolGitLog,
+  executeTool,
+  parseAgentResult,
+  TOOLS,
+};
