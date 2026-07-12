@@ -140,7 +140,11 @@ function toolListDirectory({ path: dirPath = '.' }) {
 function toolSearchInFiles({ query, path: searchPath = '.', regex = false }) {
   try {
     const abs = safePath(searchPath);
-    const flags = ['-r', '-l', '--include=*'];
+    // The runtime image ships BusyBox grep (no GNU coreutils), which doesn't support
+    // GNU-only flags like --include=. Stick to flags BusyBox grep actually documents
+    // (-r/-l/-F/-E), otherwise grep exits with status 2 and empty stdout, which used to be
+    // silently reported as "No matches found." even though the search never ran.
+    const flags = ['-r', '-l'];
     flags.push(regex ? '-E' : '-F'); // extended regex when regex=true, fixed string otherwise
     const result = spawnSync('grep', [...flags, query, abs], {
       encoding: 'utf8',
@@ -149,6 +153,10 @@ function toolSearchInFiles({ query, path: searchPath = '.', regex = false }) {
 
     if (result.error) {
       return `Search error: ${result.error.message}`;
+    }
+
+    if (result.status === 2) {
+      return `Search error: ${(result.stderr || '').trim() || 'grep exited with status 2'}`;
     }
 
     const files = (result.stdout || '').trim();

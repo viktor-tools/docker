@@ -114,6 +114,50 @@ describe('toolSearchInFiles', () => {
   test('returns "No matches found." when nothing matches', () => {
     expect(toolSearchInFiles({ query: 'nonexistent_token_xyz', path: '.' })).toBe('No matches found.');
   });
+
+  // Regression guard: the production image (deep/Dockerfile, oven/bun:alpine) never installs
+  // GNU coreutils, so `grep` is BusyBox grep. BusyBox grep doesn't support GNU-only long options
+  // such as `--include=`/`--exclude=`. Passing one makes grep exit with status 2 and empty
+  // stdout, which used to be silently reported as "No matches found." for every single query
+  // (e.g. a plain, unambiguous search for "password" in a file that plainly contains it).
+  // See: docker run --rm oven/bun:alpine grep --help (lists only -HhnlLcoqvsrRiwFE, -m/-A/-B/-C, -e/-f).
+  test('never passes a GNU-only long option (--foo) to grep, since BusyBox grep does not support them', () => {
+    const source = fs.readFileSync(path.join(__dirname, 'entrypoint.js'), 'utf8');
+    const fnStart = source.indexOf('function toolSearchInFiles');
+    const fnEnd = source.indexOf('function toolGetFileTree');
+    expect(fnStart).toBeGreaterThan(-1);
+    expect(fnEnd).toBeGreaterThan(fnStart);
+    const fnSource = source.slice(fnStart, fnEnd);
+    // Every flag/option passed to grep in this function is a quoted string, e.g. '-r', '-F',
+    // '--include=*'. Flag any long-option literal (quoted string starting with --).
+    expect(fnSource).not.toMatch(/'--\w/);
+  });
+
+  // Same bug, but reproduced against the exact runtime image instead of the dev machine's GNU
+  // grep (which happily accepts --include= and would never catch this). Skipped when Docker
+  // isn't available (e.g. some CI runners) rather than failing the whole suite.
+  const dockerAvailable = (() => {
+    try {
+      execSync('docker info', { stdio: 'ignore' });
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+
+  test.skipIf(!dockerAvailable)(
+    'finds a plain literal match when run inside the actual deep/Dockerfile image (BusyBox grep)',
+    () => {
+      const output = execSync(
+        `docker run --rm -v "${REPO_DIR}:/repo:ro" -v "${path.join(__dirname, 'entrypoint.js')}:/tmp/entrypoint.js:ro" ` +
+          `-e VIKTOR_REPO_DIR=/repo oven/bun:alpine bun -e ` +
+          `"const { toolSearchInFiles } = require('/tmp/entrypoint.js'); console.log(toolSearchInFiles({ query: 'login', path: 'apps' }));"`,
+        { encoding: 'utf8', timeout: 60_000 }
+      );
+      expect(output).toContain('login.component.ts');
+    },
+    60_000
+  );
 });
 
 describe('toolGetFileTree', () => {
