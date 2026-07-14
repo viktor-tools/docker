@@ -419,7 +419,7 @@ async function main() {
   // 5. Agent loop
   console.log('Starting agent loop...');
   let stepCount = 0;
-  const MAX_STEPS = 50;
+  const MAX_STEPS = 100;
 
   while (stepCount < MAX_STEPS) {
     stepCount++;
