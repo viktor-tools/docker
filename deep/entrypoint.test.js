@@ -22,6 +22,8 @@ const {
   toolGitLog,
   executeTool,
   parseAgentResult,
+  repoPathAndHost,
+  postFailureComment,
 } = require('./entrypoint.js');
 
 function write(relPath, content) {
@@ -224,6 +226,101 @@ describe('executeTool', () => {
 
   test('reports an unknown tool name', () => {
     expect(executeTool('does_not_exist', {})).toBe('Unknown tool: does_not_exist');
+  });
+});
+
+describe('repoPathAndHost', () => {
+  test('parses a GitHub HTTPS URL', () => {
+    expect(repoPathAndHost('https://github.com/owner/repo.git')).toEqual({ host: 'github.com', path: 'owner/repo' });
+  });
+
+  test('parses a GitLab URL with subgroups', () => {
+    expect(repoPathAndHost('https://gitlab.example.com/group/subgroup/repo.git')).toEqual({
+      host: 'gitlab.example.com',
+      path: 'group/subgroup/repo',
+    });
+  });
+
+  test('returns null for an invalid URL', () => {
+    expect(repoPathAndHost('not-a-url')).toBeNull();
+  });
+});
+
+describe('postFailureComment', () => {
+  const originalFetch = global.fetch;
+
+  afterAll(() => {
+    global.fetch = originalFetch;
+  });
+
+  test('posts to the GitHub issues comments endpoint for a github.com repo', async () => {
+    let capturedUrl;
+    let capturedOptions;
+    global.fetch = async (url, options) => {
+      capturedUrl = url;
+      capturedOptions = options;
+      return { ok: true, json: async () => ({}) };
+    };
+
+    await postFailureComment({
+      repoUrl: 'https://github.com/owner/repo.git',
+      mergeRequestId: '42',
+      vcsToken: 'secret-token',
+      reason: 'Something went wrong.',
+    });
+
+    expect(capturedUrl).toBe('https://api.github.com/repos/owner/repo/issues/42/comments');
+    expect(capturedOptions.headers.Authorization).toBe('Bearer secret-token');
+    expect(JSON.parse(capturedOptions.body).body).toContain('Something went wrong.');
+  });
+
+  test('posts to the GitLab notes endpoint (URL-encoded project path) for a non-github.com repo', async () => {
+    let capturedUrl;
+    let capturedOptions;
+    global.fetch = async (url, options) => {
+      capturedUrl = url;
+      capturedOptions = options;
+      return { ok: true, json: async () => ({}) };
+    };
+
+    await postFailureComment({
+      repoUrl: 'https://gitlab.com/group/subgroup/repo.git',
+      mergeRequestId: '7',
+      vcsToken: 'secret-token',
+      reason: 'Boom.',
+    });
+
+    expect(capturedUrl).toBe('https://gitlab.com/api/v4/projects/group%2Fsubgroup%2Frepo/merge_requests/7/notes');
+    expect(capturedOptions.headers['PRIVATE-TOKEN']).toBe('secret-token');
+  });
+
+  test('does nothing when the repo URL, merge request ID, or token is missing', async () => {
+    let called = false;
+    global.fetch = async () => {
+      called = true;
+      return { ok: true, json: async () => ({}) };
+    };
+
+    await postFailureComment({ repoUrl: '', mergeRequestId: '42', vcsToken: 'x', reason: 'x' });
+    await postFailureComment({ repoUrl: 'https://github.com/owner/repo.git', mergeRequestId: '', vcsToken: 'x', reason: 'x' });
+    await postFailureComment({ repoUrl: 'https://github.com/owner/repo.git', mergeRequestId: '42', vcsToken: '', reason: 'x' });
+
+    expect(called).toBe(false);
+  });
+
+  test('swallows fetch errors instead of throwing', async () => {
+    global.fetch = async () => {
+      throw new Error('network down');
+    };
+
+    await expect(
+      postFailureComment({
+        repoUrl: 'https://github.com/owner/repo.git',
+        mergeRequestId: '42',
+        vcsToken: 'secret-token',
+        reason: 'x',
+      })
+    ).resolves.toBeUndefined();
   });
 });
 
